@@ -1,0 +1,34 @@
+{
+ "timestamps_user": {
+    "spiffe://acme.com/projeto1": ["1721397028", "1721397018","1721397015"],
+    "spiffe://acme.com/projeto2": ["1721397028", "1721397018","1721397015","1721397015"],
+    "spiffe://acme.com/projeto3": ["1721397028", "1721397018","1721397015"]
+  },
+  "rate_limits_config": {
+    "time_window_seconds": 60, 
+    "max_requests_per_window": 100 
+  },
+  "building_svc": [
+    "spiffe://acme.com/projeto1", 
+    "spiffe://acme.com/projeto2"
+  ],
+  "consumption_svc": [
+    "spiffe://acme.com/projeto3"
+  ],
+  "unsupported_svc": [
+    "spiffe://acme.com/projeto1"
+  ],
+  "sensor_svc": [
+    "spiffe://acme.com/projeto1",
+    "spiffe://acme.com/projeto2"
+  ],
+  "statistics_svc": [
+    "spiffe://acme.com/projeto1",
+    "spiffe://acme.com/projeto2",
+    "spiffe://acme.com/projeto3"
+  ],
+  "user_svc": [
+    "spiffe://acme.com/projeto1",
+    "spiffe://acme.com/projeto2"
+  ]
+}
