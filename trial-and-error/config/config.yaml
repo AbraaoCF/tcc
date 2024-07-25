@@ -1,0 +1,5 @@
+services:
+  - name: logs
+    url: http://log-forwarder:8080
+
+# Optionally configure a `default` service for OPA queries.
