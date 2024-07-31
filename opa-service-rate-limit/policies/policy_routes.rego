@@ -4,121 +4,119 @@ import rego.v1
 
 route := http_request.path
 
-endpoint := route
-
 # Auth
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/auth$`, route)
-	endpoint = `/service/rest/auth`
+	endpoint := `/service/rest/auth`
 	# svc_spiffe_id
 }
 
 # Building
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/building/[^/]+$`, route)
 	check_id_building
-	endpoint = `/service/rest/building/[^/]+$`
+	endpoint := `/service/rest/building/[^/]+$`
 }
 
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/building/[^/]+/sensors$`, route)
 	check_id_building
-	endpoint = `/service/rest/building/[^/]+/sensors`
+	endpoint := `/service/rest/building/[^/]+/sensors`
 }
 
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/building/[^/]+/demands$`, route)
 	check_id_building
-	endpoint = `/service/rest/building/[^/]+/demands`
+	endpoint := `/service/rest/building/[^/]+/demands`
 }
 
 # Consumption
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/building/[^/]+/demand/last$`, route)
 	check_id_consumption
-	endpoint = `/service/rest/building/[^/]+/demand/last$`
+	endpoint := `/service/rest/building/[^/]+/demand/last$`
 }
 
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/building/[^/]+/demand/last_n_minutes$`, route)
 	check_id_consumption
-	endpoint = `/service/rest/building/[^/]+/demand/last_n_minutes$`
+	endpoint := `/service/rest/building/[^/]+/demand/last_n_minutes$`
 }
 
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/building/[^/]+/consumption$`, route)
 	check_id_consumption
-	endpoint = `/service/rest/building/[^/]+/consumption$`
+	endpoint := `/service/rest/building/[^/]+/consumption$`
 }
 
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/building/[^/]+/demandReport$`, route)
 	check_id_consumption
-	endpoint = `/service/rest/building/[^/]+/demandReport$`
+	endpoint := `/service/rest/building/[^/]+/demandReport$`
 }
 
 # Unsupported Media Type
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/building/[^/]+/consumption/disaggregated$`, route)
 	check_id_unsupported
-	endpoint = `/service/rest/building/[^/]+/consumption/disaggregated$`
+	endpoint := `/service/rest/building/[^/]+/consumption/disaggregated$`
 }
 
 # Sensor
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/sensors$`, route)
 	check_id_sensor
-	endpoint = `/service/rest/sensors`
+	endpoint := `/service/rest/sensors`
 }
 
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/sensor/[^/]+$`, route)
 	check_id_sensor
-	endpoint = `/service/rest/sensor/[^/]+$`
+	endpoint := `/service/rest/sensor/[^/]+$`
 }
 
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/consumptionHistory$`, route)
 	check_id_sensor
-	endpoint = `/service/rest/consumptionHistory`
+	endpoint := `/service/rest/consumptionHistory`
 }
 
 # Statistics
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/building/[^/]+/statistics$`, route)
 	check_id_statistics
-	endpoint = `/service/rest/building/[^/]+/statistics$`
+	endpoint := `/service/rest/building/[^/]+/statistics$`
 }
 
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/sensor/[^/]+/statistics$`, route)
 	check_id_statistics
-	endpoint = `/service/rest/sensor/[^/]+/statistics$`
+	endpoint := `/service/rest/sensor/[^/]+/statistics$`
 }
 
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/building/[^/]+/statisticsStatus$`, route)
 	check_id_statistics
-	endpoint = `/service/rest/building/[^/]+/statisticsStatus$`
+	endpoint := `/service/rest/building/[^/]+/statisticsStatus$`
 }
 
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/building/[^/]+/periodStatisticsStatus$`, route)
 	check_id_statistics
-	endpoint = `/service/rest/building/[^/]+/periodStatisticsStatus$`
+	endpoint := `/service/rest/building/[^/]+/periodStatisticsStatus$`
 }
 
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/building/[^/]+/statistics/alwayson$`, route)
 	check_id_statistics
-	endpoint = `/service/rest/building/[^/]+/statistics/alwayson$`
+	endpoint := `/service/rest/building/[^/]+/statistics/alwayson$`
 }
 
 # User
-allow_path if {
+allow_path := endpoint if {
 	regex.match(`^/service/rest/user/[^/]+/sensors$`, route)
 	check_id_user
-	endpoint = `/service/rest/user/[^/]+/sensors`
+	endpoint := `/service/rest/user/[^/]+/sensors`
 }
 
 svc_spiffe_id := client_id if {

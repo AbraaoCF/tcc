@@ -21,12 +21,12 @@
                         "user-agent": "curl/7.68.0",
                         "x-forwarded-proto": "http",
                         "x-request-id": "a7f8ec8a-b947-465d-a862-f82e03e1a9fe",
-                        "x-forwarded-client-cert": "By=subject=<subject>;By=<issuer>;URI=spiffe://acme.com/projeto1"
+                        "x-forwarded-client-cert": "By=subject=<subject>;By=<issuer>;URI=spiffe://acme.com/projeto2"
                     },
                     "host": "localhost:8080",
                     "id": "13643127910245826694",
                     "method": "GET",
-                    "path": "/service/rest/consumptionHistory",
+                    "path": "/service/rest/building/1/consumption/disaggregated",
                     "protocol": "HTTP/1.1",
                     "scheme": "http"
                 },
