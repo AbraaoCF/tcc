@@ -16,18 +16,18 @@ now := time.now_ns() / 1000000000 # Current time in seconds
 
 window_start := now - data.rate_limits_config.time_window_seconds
 
-setup_user_budget := user_budget if {
+user_budget := budget if {
 	not outside_working_hours
-	user_budget := projects_config[svc_spiffe_id].budget
+	budget := projects_config[svc_spiffe_id].budget
 }
 
-setup_user_budget := user_budget if {
+user_budget := budget if {
 	outside_working_hours
-	user_budget := night_mode
+	budget := night_mode
 }
 
 outside_working_hours if {
-    [hour, _, _]:= time.clock(time.now_ns())
+	[hour, _, _] := time.clock(time.now_ns())
 	print("outside_working_hours -", hour)
 
 	not hour >= 9 # Start of business hours
@@ -61,24 +61,24 @@ allow := response if {
 	http_request.method == "GET"
 	endpoint := allow_path
 	user := svc_spiffe_id
-	user_budget := setup_user_budget
 	print("allow -", endpoint, user)
 	print("allow - setup_user_budget:", user_budget)
 	print("allow - rate_limit_user:", rate_limit_user)
+
 	# User martelando
 	user_logs_count := request_count(user, rate_limit_user, window_start)
-	print("allow - user_logs_count:",user_logs_count)
+	print("allow - user_logs_count:", user_logs_count)
 	user_logs_count < rate_limit_user
 
 	# Endpoint martelado
 	endpoint_logs_count := request_count(endpoint, rate_limit_endpoint, window_start)
-	print("allow - endpoint_logs_count:",endpoint_logs_count)
+	print("allow - endpoint_logs_count:", endpoint_logs_count)
 	endpoint_logs_count < rate_limit_endpoint
 
 	# User martelando, endpoint martelado
 	user_endpoint := sprintf("%s/%s", [user, endpoint])
 	user_endpoint_logs_count := request_count(user_endpoint, rate_limit_user_endpoint, window_start)
-	print("allow - user_endpoint_logs_count:",user_endpoint_logs_count)
+	print("allow - user_endpoint_logs_count:", user_endpoint_logs_count)
 	user_endpoint_logs_count < rate_limit_user_endpoint
 
 	# Budget
@@ -119,10 +119,10 @@ request_logs_cost(id, budget, window_start) := total_cost if {
 	print("request_logs_cost URL - http://localhost:7379/LRANGE/", urlquery.encode(id), "/0/", budget)
 	redisl := http.send({
 		"method": "GET",
-		"url": sprintf("http://localhost:7379/LRANGE/%s/0/%v", [urlquery.encode(id), budget]), 
+		"url": sprintf("http://localhost:7379/LRANGE/%s/0/%v", [urlquery.encode(id), budget]),
 	})
 	print("request_logs_cost result - ", redisl.body.LRANGE)
-	filtered_costs := [parse_budget(item).cost | some item in redisl.body.LRANGE; parse_budget(item).timestamp > window_start]
+	filtered_costs := [parse_value(item).cost | some item in redisl.body.LRANGE; parse_value(item).timestamp > window_start]
 	print("request_logs_cost result - ", filtered_costs)
 	total_cost := sum(filtered_costs)
 }
@@ -149,8 +149,8 @@ log_request(id, value) if {
 # Convert string timestamps to float numbers and filter
 filter_logs(timestamps, window) := {to_number(ts) | some ts in timestamps; to_number(ts) >= window}
 
-parse_budget(item) = { "timestamp": ts, "cost": cost } if {
-    split(item, ":", parts)
-    ts = to_number(parts[0])
-    cost = to_number(parts[1])
+parse_value(item) := {"timestamp": ts, "cost": cost} if {
+	parts := split(item, ":")
+	ts = to_number(parts[0])
+	cost = to_number(parts[1])
 }
