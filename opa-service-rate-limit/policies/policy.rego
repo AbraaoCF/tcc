@@ -105,22 +105,21 @@ allow := response if {
 }
 
 request_count(id, size, window_start) := counter if {
-	print("request_count URL - http://localhost:7379/LRANGE/", urlquery.encode(id), "/-", size, "/-1")
+	print("request_count URL - http://localhost:7379/LRANGE/", urlquery.encode(id), "/0/", size)
 	redisl := http.send({
 		"method": "GET",
-		"url": sprintf("http://localhost:7379/LRANGE/%s/-%v/-1", [urlquery.encode(id), size]),
+		"url": sprintf("http://localhost:7379/LRANGE/%s/0/%v", [urlquery.encode(id), size]),
 	})
 	print("request_count result -", redisl.body.LRANGE)
 	filtered := filter_logs(redisl.body.LRANGE, window_start)
 	counter := count(filtered)
 }
 
-# TODO: change LRANGE with negative interval to RRANGE or change RPUSH to LRPUSH
 request_logs_cost(id, budget, window_start) := total_cost if {
-	print("request_logs_cost URL - http://localhost:7379/LRANGE/", urlquery.encode(id), "/-", budget, "/-1")
+	print("request_logs_cost URL - http://localhost:7379/LRANGE/", urlquery.encode(id), "/0/", budget)
 	redisl := http.send({
 		"method": "GET",
-		"url": sprintf("http://localhost:7379/LRANGE/%s/-%v/-1", [urlquery.encode(id), budget]), 
+		"url": sprintf("http://localhost:7379/LRANGE/%s/0/%v", [urlquery.encode(id), budget]), 
 	})
 	print("request_logs_cost result - ", redisl.body.LRANGE)
 	filtered_costs := [parse_budget(item).cost | some item in redisl.body.LRANGE; parse_budget(item).timestamp > window_start]
@@ -131,16 +130,16 @@ request_logs_cost(id, budget, window_start) := total_cost if {
 # Budget
 log_request_budget(id, timestamp, value) if {
 	valor := sprintf("%.5f:%v", [timestamp, value])
-	print(sprintf("http://localhost:7379/RPUSH/%s/%s", [urlquery.encode(id), urlquery.encode(valor)]))
+	print(sprintf("http://localhost:7379/LPUSH/%s/%s", [urlquery.encode(id), urlquery.encode(valor)]))
 	answer := http.send({
 		"method": "GET",
-		"url": sprintf("http://localhost:7379/RPUSH/%s/%s", [urlquery.encode(id), urlquery.encode(valor)]),
+		"url": sprintf("http://localhost:7379/LPUSH/%s/%s", [urlquery.encode(id), urlquery.encode(valor)]),
 	})
 	print("log_request_budget result:", answer.body)
 }
 
 log_request(id, value) if {
-	print("log_request URL - http://localhost:7379/RPUSH/", urlquery.encode(id), "/", "/", value)
+	print("log_request URL - http://localhost:7379/LPUSH/", urlquery.encode(id), "/", "/", value)
 	http.send({
 		"method": "GET",
 		"url": sprintf("http://localhost:7379/RPUSH/%s/%.5f", [urlquery.encode(id), value]),
