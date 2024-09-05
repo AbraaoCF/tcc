@@ -9,7 +9,7 @@ The [policy_routes.rego](../policies/policy_routes.rego) file is designed to val
 
 To enhance security, we can add a more specific check for individual endpoints. This involves registering IDs for the endpoints in the [`data.json`](../policies/data.json) file and incorporating an additional check within the respective function. This approach increases the granularity of the policy, ensuring more precise access control.
 
-## Rate Limits
+## Rate Limits (User/Endpoint/User-Endpoint)
 
 Regarding rate limits, it was used [OPA Data API](https://www.openpolicyagent.org/docs/latest/philosophy/#the-opa-document-model) to call a Rest API for our Redis instance. The configuration is defined on the [`data.json`](../policies/data.json). Four rate limits policies were created, one implementing a budget mechanism that we will go in details below and three of them implement a simple method of amount of request per window:
 
@@ -17,11 +17,11 @@ Regarding rate limits, it was used [OPA Data API](https://www.openpolicyagent.or
 - **Rate Limit Endpoint**: Defines how much request a endpoint can receive independently of the user.
 - **Rate Limit User-Endpoint**: Defines how much a user can call a request on a specific endpoint.
 
-### Rate Limit With User Budget and Endpoint Costs
+## Rate Limit With User Budget and Endpoint Costs
 
 This approach recognizes that some endpoints are more CPU-intensive than others. To protect the system from users who might be unaware of the resource constraints, a **budget per user** strategy was implemented.
 
-#### Budget Per User Strategy
+### Budget Per User Strategy
 
 - **CPU Coins**: Each user is allocated a certain amount of **CPU coins** to spend within a defined time window.
 - **Endpoint Costs**: Each endpoint has an associated cost in **CPU coins**.

@@ -1,3 +1,27 @@
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#	 		OPA Policy with Zero Trust Approach 		  #
+# 					  Rate Limiting 				  	  #
+# 			Author: Abraão Caiana de Freitas   		 	  #
+#					(github.com/AbraaoCF) 		    	  #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #	# #
+#  Some of the features of this policy are:				  #
+#														  #
+#  - Rate Limiting 										  #
+#     - User (disabled by default) 						  #
+#			To enable, uncoment the lines 80-82 and 91 	  #
+#     - Endpoint (disabled by default) 					  #
+# 			To enable, uncoment the lines 83-85 and 92 	  #
+#     - User/Endpoint (disabled by default) 			  #
+#			To enable, uncoment the lines 86-88 and 93	  #
+#														  #
+#  - Rate Limiting with Budget (enabled by default)		  #
+#														  #
+#  - Night Budget Evaluation (disabled by default) 	  	  #
+# 		To enable, the specific project configuration     #
+#		must set the night_budget attribute != 0		  #
+#														  #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 package envoy.authz
 
 import rego.v1
@@ -36,16 +60,12 @@ user_budget := budget if {
 
 outside_working_hours if {
 	[hour, _, _] := time.clock(time.now_ns())
-	#print("outside_working_hours -", hour)
-
-	not hour >= environment_variables.starting_working_hours 
-	not hour <= environment_variables.ending_working_hours 
-	#print("outside_working_hours - outside")
+	not hour >= environment_variables.starting_working_hours
+	not hour <= environment_variables.ending_working_hours
 }
 
 default allow := false
 
-# Admin
 allow := response if {
 	svc_spiffe_id == "spiffe://acme.com/admin"
 	response := {
@@ -62,36 +82,26 @@ allow := response if {
 	endpoint := allow_path
 	user := svc_spiffe_id
 	not user in data.anomalies.users
-	#print("allow -", endpoint, user)
-	#print("allow - setup_user_budget:", user_budget)
-	#print("allow - rate_limit_user:", rate_limit_user)
 
-	# # User martelando
+	# User Rate Limiting
 	# user_logs_count := request_count(user, rate_limit_user, window_start)
-	# #print("allow - user_logs_count:", user_logs_count)
 	# user_logs_count < rate_limit_user
 
-	# # Endpoint martelado
+	# Endpoint Rate Limiting
 	# endpoint_logs_count := request_count(endpoint, rate_limit_endpoint, window_start)
-	# #print("allow - endpoint_logs_count:", endpoint_logs_count)
 	# endpoint_logs_count < rate_limit_endpoint
 
-	# # User martelando, endpoint martelado
+	# User-Endpoint Rate Limiting
 	# user_endpoint := sprintf("%s/%s", [user, endpoint])
 	# user_endpoint_logs_count := request_count(user_endpoint, rate_limit_user_endpoint, window_start)
-	# #print("allow - user_endpoint_logs_count:", user_endpoint_logs_count)
 	# user_endpoint_logs_count < rate_limit_user_endpoint
 
-	# Budget
-	#print("allow - user_budget_begin")
+	# Budget Rate Limiting
 	user_id_budget := sprintf("%s/budget", [user])
 	cost_logs := request_logs_cost(user_id_budget, user_budget, window_start)
 	cost_request := data.cost_endpoints[endpoint]
-	#print("allow - cost_logs/cost_request:", cost_logs, cost_request)
 	cost_logs + cost_request < user_budget
-	#print("allow - user_budget_end")
 
-	# Response
 	response := {
 		"allowed": true,
 		"headers": {"x-ext-authz-check": "allowed"},
@@ -103,86 +113,63 @@ allow := response if {
 	# log_request(user, now)
 	# log_request(endpoint, now)
 	# log_request(user_endpoint, now)
-
 	log_request_budget(user_id_budget, now, cost_request)
 }
 
-ca_cert:= data.certs.ca_cert
-client_cert:= data.certs.client_cert
-client_key:= data.certs.client_key
+ca_cert := data.certs.ca_cert
 
-# Request
+client_cert := data.certs.client_cert
+
+client_key := data.certs.client_key
+
 request_count(id, size, window_start) := counter if {
-	#print("request_count URL - https://nginx:443/LRANGE/", urlquery.encode(id), "/0/", size)
-	#print(client_key)
-	#print(client_key)
 	response := http.send({
 		"method": "GET",
 		"url": sprintf("https://nginx:443/LRANGE/%s/0/%v", [urlquery.encode(id), size]),
-		"headers": {
-            "Content-Type": "application/json"
-        },
-		# "insecure_skip_verify": true
+		"headers": {"Content-Type": "application/json"},
 		"tls_ca_cert": ca_cert,
 		"tls_client_cert": client_cert,
 		"tls_client_key": client_key,
 	})
-	#print("request_count result -", response.status)
-	#print("request_count result -", response)
 	filtered := filter_logs(response.body.LRANGE, window_start)
 	counter := count([1])
 }
 
 request_logs_cost(id, budget, window_start) := total_cost if {
-	#print("request_logs_cost URL - https://nginx:443/LRANGE/", urlquery.encode(id), "/0/", budget)
 	redisl := http.send({
 		"method": "GET",
 		"url": sprintf("https://nginx:443/LRANGE/%s/0/%v", [urlquery.encode(id), budget]),
-		"headers": {
-            "Content-Type": "application/json"
-        },
+		"headers": {"Content-Type": "application/json"},
 		"tls_ca_cert": ca_cert,
 		"tls_client_cert": client_cert,
 		"tls_client_key": client_key,
 	})
-	# print("request_logs_cost result - ", redisl.body.LRANGE)
-	# print(sprintf("%.9f", window_start))
 	filtered_costs := [parse(item).cost | some item in redisl.body.LRANGE; parse(item).timestamp > window_start]
-	# print("request_logs_cost result - ", filtered_costs)
 	total_cost := sum(filtered_costs)
 }
 
 # Budget
 log_request_budget(id, timestamp, value) if {
 	valor := sprintf("%.5f:%v", [timestamp, value])
-	# print(valor)
-	#print(sprintf("https://nginx:443/LPUSH/%s/%s", [urlquery.encode(id), urlquery.encode(valor)]))
 	answer := http.send({
 		"method": "GET",
 		"url": sprintf("https://nginx:443/LPUSH/%s/%s", [urlquery.encode(id), urlquery.encode(valor)]),
-		"headers": {
-            "Content-Type": "application/json"
-        },
+		"headers": {"Content-Type": "application/json"},
 		"tls_ca_cert": ca_cert,
 		"tls_client_cert": client_cert,
 		"tls_client_key": client_key,
 	})
-	#print("log_request_budget result:", answer.body)
 }
 
 log_request(id, value) if {
-	#print("log_request URL - ", sprintf("https://nginx:443/RPUSH/%s/%.5f", [urlquery.encode(id), value]))
 	valuer := http.send({
 		"method": "GET",
 		"url": sprintf("https://nginx:443/LPUSH/%s/%.5f", [urlquery.encode(id), value]),
-		"headers": {
-            "Content-Type": "application/json"
-        },
+		"headers": {"Content-Type": "application/json"},
 		"tls_ca_cert": ca_cert,
 		"tls_client_cert": client_cert,
 		"tls_client_key": client_key,
 	})
-	#print("log_request result:", valuer)
 }
 
 # Convert string timestamps to float numbers and filter
@@ -193,4 +180,3 @@ parse(item) := {"timestamp": ts, "cost": cost} if {
 	ts = to_number(parts[0])
 	cost = to_number(parts[1])
 }
-# curl --cert envoy-client-cert.pem --key envoy-client-key.pem --cacert ca.pem https://ext_authz-opa-service/v1/data/envoy/authz/allow

@@ -15,7 +15,7 @@
                     "headers": {
                         ":authority": "localhost:8080",
                         ":method": "GET",
-                        ":path": "/service/rest/consumptionHistory",
+                        ":path": "/service/rest/building/1/consumption/disaggregated",
                         ":scheme": "http",
                         "accept": "*/*",
                         "user-agent": "curl/7.68.0",

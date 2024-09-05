@@ -18,7 +18,7 @@
       "/service/rest/building/[^/]+/demand/last_n_minutes$": 2,
       "/service/rest/building/[^/]+/consumption$": 2,
       "/service/rest/building/[^/]+/demandReport$": 2,
-      "/service/rest/building/[^/]+/consumption/disaggregated$": 3,
+      "/service/rest/building/[^/]+/consumption/disaggregated$": 0,
       "/service/rest/sensors": 2,
       "/service/rest/sensor/[^/]+$": 2,
       "/service/rest/consumptionHistory": 2,

@@ -59,7 +59,7 @@ services:
       dockerfile: ./src/Dockerfile.static-opa
     ports:
       - "8182:8182"
-      - "9003:9003"  # Exposing port 9002 for the gRPC server
+      - "9003:9003"  # Exposing port 9003 for the gRPC server
     volumes:
       - ./src/static-opa-policies:/app/policies
       - ./src/tls/opa-tls-config:/app/tls
