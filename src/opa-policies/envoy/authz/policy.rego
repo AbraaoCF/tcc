@@ -49,19 +49,19 @@ now := time.now_ns() / 1000000000
 window_start := now - data.rate_limits_config.time_window_seconds
 
 user_budget := budget if {
-	not outside_working_hours
+	inside_working_hours
 	budget := project_config.budget
 }
 
 user_budget := budget if {
-	outside_working_hours
+	not inside_working_hours
 	budget := project_config.night_budget
 }
 
-outside_working_hours if {
+inside_working_hours if {
 	[hour, _, _] := time.clock(time.now_ns())
-	not hour >= environment_variables.starting_working_hours
-	not hour <= environment_variables.ending_working_hours
+	hour >= environment_variables.starting_working_hours
+	hour <= environment_variables.ending_working_hours
 }
 
 default allow := false
@@ -73,6 +73,19 @@ allow := response if {
 		"headers": {"x-ext-authz-check": "allowed"},
 		"id": svc_spiffe_id,
 		"request_costs": -1,
+		"budget_left": -1,
+	}
+}
+
+allow := response if {
+	http_request.method == "GET"
+	endpoint := allow_path
+	endpoint in data.whitelisted_endpoints
+	response := {
+		"allowed": true,
+		"headers": {"x-ext-authz-check": "allowed"},
+		"id": svc_spiffe_id,
+		"request_costs": 0,
 		"budget_left": -1,
 	}
 }
@@ -100,7 +113,7 @@ allow := response if {
 	user_id_budget := sprintf("%s/budget", [user])
 	cost_logs := request_logs_cost(user_id_budget, user_budget, window_start)
 	cost_request := data.cost_endpoints[endpoint]
-	cost_logs + cost_request < user_budget
+	cost_logs + cost_request <= user_budget
 
 	response := {
 		"allowed": true,
@@ -125,7 +138,7 @@ client_key := data.certs.client_key
 request_count(id, size, window_start) := counter if {
 	response := http.send({
 		"method": "GET",
-		"url": sprintf("https://nginx:443/LRANGE/%s/0/%v", [urlquery.encode(id), size]),
+		"url": sprintf("https://envoy:10004/LRANGE/%s/0/%v", [urlquery.encode(id), size]),
 		"headers": {"Content-Type": "application/json"},
 		"tls_ca_cert": ca_cert,
 		"tls_client_cert": client_cert,
@@ -136,16 +149,24 @@ request_count(id, size, window_start) := counter if {
 }
 
 request_logs_cost(id, budget, window_start) := total_cost if {
+	# print(sprintf("https://envoy:10004/LRANGE/%s/0/%v", [urlquery.encode(id), budget]))
 	redisl := http.send({
 		"method": "GET",
-		"url": sprintf("https://nginx:443/LRANGE/%s/0/%v", [urlquery.encode(id), budget]),
-		"headers": {"Content-Type": "application/json"},
+		"url": sprintf("https://envoy:10005/LRANGE/%s/0/%v", [urlquery.encode(id), budget]),
+		"headers": {
+			"Content-Type": "application/json",
+			"x-timestamp": sprintf("%f", [window_start]),
+		},
 		"tls_ca_cert": ca_cert,
 		"tls_client_cert": client_cert,
 		"tls_client_key": client_key,
 	})
-	filtered_costs := [parse(item).cost | some item in redisl.body.LRANGE; parse(item).timestamp > window_start]
-	total_cost := sum(filtered_costs)
+	# print("out")
+	# print(redisl.body)
+	# filtered_costs := [parse(item).cost | some item in redisl.body.LRANGE; parse(item).timestamp > window_start]
+	# total_cost := sum(filtered_costs)
+	total_cost := to_number(redisl.body)
+
 }
 
 # Budget
@@ -153,7 +174,7 @@ log_request_budget(id, timestamp, value) if {
 	valor := sprintf("%.5f:%v", [timestamp, value])
 	answer := http.send({
 		"method": "GET",
-		"url": sprintf("https://nginx:443/LPUSH/%s/%s", [urlquery.encode(id), urlquery.encode(valor)]),
+		"url": sprintf("https://envoy:10004/LPUSH/%s/%s", [urlquery.encode(id), urlquery.encode(valor)]),
 		"headers": {"Content-Type": "application/json"},
 		"tls_ca_cert": ca_cert,
 		"tls_client_cert": client_cert,
@@ -164,7 +185,7 @@ log_request_budget(id, timestamp, value) if {
 log_request(id, value) if {
 	valuer := http.send({
 		"method": "GET",
-		"url": sprintf("https://nginx:443/LPUSH/%s/%.5f", [urlquery.encode(id), value]),
+		"url": sprintf("https://envoy:10004/LPUSH/%s/%.5f", [urlquery.encode(id), value]),
 		"headers": {"Content-Type": "application/json"},
 		"tls_ca_cert": ca_cert,
 		"tls_client_cert": client_cert,

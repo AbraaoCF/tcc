@@ -1,74 +1,39 @@
 services:
   webdis:
     image: nicolas/webdis:latest
-    container_name: webdis
-    ports:
-      - "7379:7379"
-    networks:
-      - local
-      - cache
-
-  nginx:
-    image: nginx:latest
-    depends_on:
-      - webdis
-    ports:
-      - "443:443"
-    volumes:
-      - ./src/tls/nginx-tls-config:/etc/nginx/tls
-      - ./src/cache-server/nginx.conf:/etc/nginx/nginx.conf
-    networks:
-      - local
-      - cache
 
   envoy:
     image: envoyproxy/envoy:v1.31.0
     ports:
       - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
+      - "10003:10003"
+      - "10004:10004"
+      - "10005:10005"
       - "9901:9901"
     volumes:
       - ./src/envoy/envoy.yaml:/etc/envoy/envoy.yaml
       - ./src/tls/envoy-tls-config:/etc/envoy/tls
-    networks:
-      - local
 
   service:
     image: hashicorp/http-echo:0.2.3
     command: ["-text=Hello, world!"]
-    ports:
-      - "5678:5678"
-    networks:
-      - local
 
   ext_authz-opa-service:
     build:
       context: .
       dockerfile: ./src/Dockerfile
-    ports:
-      - "8181:8181"
-      - "9002:9002"  # Exposing port 9002 for the gRPC server
     volumes:
       - ./src/opa-policies:/app/policies
       - ./src/tls/opa-tls-config:/app/tls
-    networks:
-      - local
 
   static-opa:
     build:
       context: .
       dockerfile: ./src/Dockerfile.static-opa
-    ports:
-      - "8182:8182"
-      - "9003:9003"  # Exposing port 9003 for the gRPC server
     volumes:
       - ./src/static-opa-policies:/app/policies
       - ./src/tls/opa-tls-config:/app/tls
-    networks:
-      - local
 
-networks:
-  local:
-    driver: bridge
-  cache:
-    driver: bridge
 

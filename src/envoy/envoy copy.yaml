@@ -1,0 +1,349 @@
+static_resources:
+  listeners:
+    - name: listener_0
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 10000
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: local_service
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: service_cluster
+                http_filters:
+                  # - name: envoy.filters.http.lua
+                  #   typed_config:
+                  #     "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                  #     inline_code: |
+                  #       function envoy_on_request(request_handle)
+                  #         request_handle:headers():replace(":path", "/v1/data/envoy/authz/allow")
+                  #       end
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      inline_code: |
+                        function envoy_on_request(request_handle)
+                          -- Add original path to a custom header before modifying
+                          local original_path = request_handle:headers():get(":path")
+                          request_handle:headers():add("x-original-path", original_path)                          
+                          request_handle:logInfo("Rewriting path to / for ext_authz")
+                          request_handle:headers():replace(":path", "/v1/data/envoy/authz/allow")
+                        end
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                      transport_api_version: V3
+                      http_service:
+                        server_uri:
+                          uri: "https://ext_authz-opa-service:8181/"
+                          cluster: ext_authz-opa-service
+                          timeout: 1s
+                        authorization_request:
+                          allowed_headers:
+                            patterns:
+                              - exact: ":method"
+                              - exact: ":path"
+                              - exact: ":authority"
+                              - exact: "x-forwarded-client-cert-test"
+                              - exact: "authorization"
+                          headers_to_add:                            
+                              key: "x-original-path"
+                              value: "%REQ(:PATH)%" 
+                        authorization_response:
+                          allowed_upstream_headers:
+                            patterns:
+                              - exact: "x-ext-authz-check"
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      inline_code: |
+                        function envoy_on_request(request_handle)
+                          -- Restore the original path from the header for the downstream service
+                          local original_path = request_handle:headers():get("x-original-path")
+                          if original_path then
+                            request_handle:logInfo("Restoring original path for downstream: " .. original_path)
+                            request_handle:headers():replace(":path", original_path)
+                          end
+                        end
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                      grpc_service:
+                        envoy_grpc:
+                          cluster_name: static-opa
+                      transport_api_version: V3
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: "/etc/envoy/tls/server-cert.pem"
+                    private_key:
+                      filename: "/etc/envoy/tls/server-key.pem"
+                validation_context:
+                  trusted_ca:
+                    filename: "/etc/envoy/tls/ca.pem"
+    - name: listener_1
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 10001
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: local_service
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: service_cluster
+                http_filters:
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      inline_code: |
+                        function envoy_on_request(request_handle)
+                          -- Add original path to a custom header before modifying
+                          local original_path = request_handle:headers():get(":path")
+                          request_handle:headers():add("x-original-path", original_path)                          
+                          request_handle:logInfo("Rewriting path to / for ext_authz")
+                          request_handle:headers():replace(":path", "/v1/data/envoy/authz/allow")
+                        end
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                      transport_api_version: V3
+                      http_service:
+                        server_uri:
+                          uri: "https://ext_authz-opa-service:8181/"
+                          cluster: ext_authz-opa-service
+                          timeout: 1s
+                        authorization_request:
+                          allowed_headers:
+                            patterns:
+                              - exact: ":method"
+                              - exact: ":path"
+                              - exact: ":authority"
+                              - exact: "x-forwarded-client-cert-test"
+                              - exact: "authorization"
+                          headers_to_add:                            
+                              key: "x-original-path"
+                              value: "%REQ(:PATH)%" 
+                        authorization_response:
+                          allowed_upstream_headers:
+                            patterns:
+                              - exact: "x-ext-authz-check"
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      inline_code: |
+                        function envoy_on_request(request_handle)
+                          -- Restore the original path from the header for the downstream service
+                          local original_path = request_handle:headers():get("x-original-path")
+                          if original_path then
+                            request_handle:logInfo("Restoring original path for downstream: " .. original_path)
+                            request_handle:headers():replace(":path", original_path)
+                          end
+                        end
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: "/etc/envoy/tls/server-cert.pem"
+                    private_key:
+                      filename: "/etc/envoy/tls/server-key.pem"
+                validation_context:
+                  trusted_ca:
+                    filename: "/etc/envoy/tls/ca.pem"
+    - name: listener_2
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 10002
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: local_service
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: service_cluster
+                http_filters:
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                      grpc_service:
+                        envoy_grpc:
+                          cluster_name: static-opa
+                      transport_api_version: V3
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: "/etc/envoy/tls/server-cert.pem"
+                    private_key:
+                      filename: "/etc/envoy/tls/server-key.pem"
+                validation_context:
+                  trusted_ca:
+                    filename: "/etc/envoy/tls/ca.pem"
+    - name: listener_3
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 10003
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: local_service
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: service_cluster
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: "/etc/envoy/tls/server-cert.pem"
+                    private_key:
+                      filename: "/etc/envoy/tls/server-key.pem"
+                validation_context:
+                  trusted_ca:
+                    filename: "/etc/envoy/tls/ca.pem"
+
+  clusters:
+    - name: service_cluster
+      connect_timeout: 0.25s
+      type: LOGICAL_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: service_cluster
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: service
+                      port_value: 5678
+    - name: ext_authz-opa-service
+      type: LOGICAL_DNS
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: ext_authz-opa-service
+        endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: ext_authz-opa-service
+                    port_value: 8181
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          common_tls_context:
+            tls_certificates:
+              - certificate_chain:
+                  filename: "/etc/envoy/tls/envoy-client-cert.pem"
+                private_key:
+                  filename: "/etc/envoy/tls/envoy-client-key.pem"
+            validation_context:
+              trusted_ca:
+                filename: "/etc/envoy/tls/ca.pem"
+    - name: static-opa
+      type: LOGICAL_DNS
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: static-opa
+        endpoints:
+        - lb_endpoints:
+          - endpoint:
+              address:
+                socket_address:
+                  address: static-opa
+                  port_value: 9003
+      # transport_socket:
+      #   name: envoy.transport_sockets.tls
+      #   typed_config:
+      #     "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+      #     common_tls_context:
+      #       tls_certificates:
+      #         - certificate_chain:
+      #             filename: "/etc/envoy/tls/envoy-client-cert.pem"
+      #           private_key:
+      #             filename: "/etc/envoy/tls/envoy-client-key.pem"
+      #       validation_context:
+      #         trusted_ca:
+      #           filename: "/etc/envoy/tls/ca.pem"
+
+admin:
+  access_log_path: "/dev/null"
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901

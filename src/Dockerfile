@@ -6,6 +6,7 @@ WORKDIR /app
 
 # Command to run the OPA server with the specified options
 CMD ["run", "-s",\
+     # "--set=default_decision=/envoy/authz/allow", \
      "--set=decision_logs.console=true", \
      "policies", \
      "--log-level", "debug", \

@@ -72,6 +72,19 @@ allow := response if {
 allow := response if {
 	http_request.method == "GET"
 	endpoint := allow_path
+	endpoint in data.whitelisted_endpoints
+	response := {
+		"allowed": true,
+		"headers": {"x-ext-authz-check": "allowed"},
+		"id": svc_spiffe_id,
+		"request_costs": 0,
+		"budget_left": -1,
+	}
+}
+
+allow := response if {
+	http_request.method == "GET"
+	endpoint := allow_path
 	user := svc_spiffe_id
 	not user in data.anomalies.users
 
@@ -91,12 +104,12 @@ allow := response if {
 }
 
 request_logs_cost(id, budget, window_start) := total_cost if {
-	filtered_costs := [parse(item).cost | some item in data.timestamps_user[id]; parse(item).timestamp > window_start]
-	total_cost := sum(filtered_costs)
+	# filtered_costs := [parse(item).cost | some item in data.timestamps_user[id]; parse(item).timestamp > window_start]
+	total_cost := data.costs_user[id]
 }
 
 # Convert string timestamps to float numbers and filter
-filter_logs(timestamps, window) := {to_number(ts) | some ts in timestamps; to_number(ts) >= window}
+# filter_logs(timestamps, window) := {to_number(ts) | some ts in timestamps; to_number(ts) >= window}
 
 parse(item) := {"timestamp": ts, "cost": cost} if {
 	parts := split(item, ":")

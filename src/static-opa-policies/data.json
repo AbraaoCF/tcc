@@ -1,8 +1,8 @@
 {
-  "timestamps_user": {
-    "spiffe://acme.com/projeto1/budget": ["1721397028:3", "1721397018:1","1721397015:1"],
-    "spiffe://acme.com/projeto2/budget": ["1721397028:3", "1721397018:1","1721397015:1"],
-    "spiffe://acme.comdock/projeto3/budget": ["1721397028:3", "1721397018:1","1721397015:1"]
+  "costs_user": {
+    "spiffe://acme.com/projeto1/budget": 3,
+    "spiffe://acme.com/projeto2/budget": 5,
+    "spiffe://acme.com/projeto3/budget": 8
   },
   "rate_limits_config": {
     "time_window_seconds": 120, 
@@ -33,6 +33,9 @@
       "/service/rest/building/[^/]+/statistics/alwayson$": 2,
       "/service/rest/user/[^/]+/sensors": 2
   },
+  "whitelisted_endpoints": [
+    "/service/rest/auth"
+  ],
   "projects_config": {
     "default": {
       "budget": 10,

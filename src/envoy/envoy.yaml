@@ -53,6 +53,532 @@ static_resources:
                 validation_context:
                   trusted_ca:
                     filename: "/etc/envoy/tls/ca.pem"
+    - name: listener_1
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 10001
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: local_service
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: service_cluster
+                http_filters:
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                      grpc_service:
+                        envoy_grpc:
+                          cluster_name: ext_authz-opa-service
+                      transport_api_version: V3
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: "/etc/envoy/tls/server-cert.pem"
+                    private_key:
+                      filename: "/etc/envoy/tls/server-key.pem"
+                validation_context:
+                  trusted_ca:
+                    filename: "/etc/envoy/tls/ca.pem"
+    - name: listener_2
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 10002
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: local_service
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: service_cluster
+                http_filters:
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                      grpc_service:
+                        envoy_grpc:
+                          cluster_name: static-opa
+                      transport_api_version: V3
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: "/etc/envoy/tls/server-cert.pem"
+                    private_key:
+                      filename: "/etc/envoy/tls/server-key.pem"
+                validation_context:
+                  trusted_ca:
+                    filename: "/etc/envoy/tls/ca.pem"
+    - name: listener_3
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 10003
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: local_service
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: service_cluster
+                http_filters:
+                  - name: envoy.filters.http.rbac
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
+                      rules:
+                        action: ALLOW
+                        policies:
+                        ## exemplo de permissões para um admin, que acessaria todos os endpoints
+                          "service-admin":
+                            permissions:
+                              - any: true
+                            principals:
+                              - authenticated:
+                                  principal_name:
+                                    exact: "spiffe://example.org/admin"
+                          "authenticate":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "POST"}}
+                                    - url_path: { path: { prefix: "/service/rest/auth" } }
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto3" } }
+        
+                          #Building
+                          "getBuilding":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path: 
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/building/[^/]+$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+                          "getBuildingSensors":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/building/[^/]+/sensors$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+                          "getDemands":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/building/[^/]+/demands$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+                          
+                          #Consumption
+                          "getLastDemand":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/building/[^/]+/demand/last$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto3" } }
+                          "getLastNMinutesDemand":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/building/[^/]+/demand/last_n_minutes$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto3" } }
+                          "getConsumption":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/building/[^/]+/consumption$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto3" } }
+                          "getDemandReport":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/building/[^/]+/demandReport$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto3" } }
+                          # Unsupported Media Type
+                          "getDisaggregatedConsumption":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                              google_re2: {}
+                                              regex: "^/service/rest/building/[^/]+/consumption/disaggregated$"  
+                            principals:
+                              - authenticated: { principal_name: { prefix: "spiffe" } }
+                          #sensor
+                          "getSensorInfos":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path: { prefix: "/service/rest/sensors"}
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+                          "getSensor":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/sensor/[^/]+$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+                          "getHistory":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path: { prefix: "/service/rest/consumptionHistory"}
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+
+                          #Statistics
+                          "getBuildingStatistics":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/building/[^/]+/statistics$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto3" } }
+                          "getSensorStatistics":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/sensor/[^/]+/statistics$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto3" } }
+                          "getStatisticsStatus":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/building/[^/]+/statisticsStatus$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto3" } }
+                          "getPeriodStatisticsStatus":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/building/[^/]+/periodStatisticsStatus$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto3" } }
+                          "getBuildingStatisticsAlwaysOn":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/building/[^/]+/statistics/alwayson$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto3" } }
+                          
+                          #User
+                          "getSensorsByUser":
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header: {name: ":method", string_match: {exact: "GET"}}
+                                    - url_path:
+                                        path:
+                                          safe_regex:
+                                            google_re2: {}
+                                            regex: "^/service/rest/user/[^/]+/sensors$"  
+                            principals:
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto1" } }
+                              - authenticated: { principal_name: { exact: "spiffe://example.org/projeto2" } }
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: "/etc/envoy/tls/server-cert.pem"
+                    private_key:
+                      filename: "/etc/envoy/tls/server-key.pem"
+                validation_context:
+                  trusted_ca:
+                    filename: "/etc/envoy/tls/ca.pem"
+    - name: cache
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 10004
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: local_service
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: webdis
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: "/etc/envoy/tls/server-cert.pem"
+                    private_key:
+                      filename: "/etc/envoy/tls/server-key.pem"
+                validation_context:
+                  trusted_ca:
+                    filename: "/etc/envoy/tls/ca.pem"
+    - name: cache_with_sum
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 10005
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: local_service
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: webdis
+                http_filters:
+                - name: envoy.filters.http.lua
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                    inline_code: |
+                      local global_timestamp = 0
+
+                      function parse_json(json_str)
+                          local data = {}
+                          -- Attempt to extract the part inside the brackets
+                          local values_str = json_str:match("%b[]")
+                          
+                          if not values_str then
+                              return data
+                          end
+                          -- Remove brackets and split the entries by comma
+                          values_str = values_str:gsub("%s+", ""):gsub("%[", ""):gsub("%]", "")
+                          
+                          for entry in values_str:gmatch("([^,]+)") do
+                              -- Trim whitespace
+                              entry = entry:gsub("^%s*(.-)%s*$", "%1")
+                              table.insert(data, entry)
+                          end
+                          return data
+                      end
+
+                      function envoy_on_request(request_handle)
+                          -- Store the x-timestamp header in the global variable
+                          local header_value = request_handle:headers():get("x-timestamp")
+                          
+                          if header_value then
+                              global_timestamp = header_value
+                          end
+                      end
+
+                      function envoy_on_response(response_handle)
+                        if not response_handle then
+                          return
+                        end
+
+                        local body = response_handle:body():getBytes(0, response_handle:body():length())
+                        local sum = 0
+                        -- Convert the body from bytes to string
+                        local body_str = tostring(body)
+                        -- Debugging: Print the received body and header
+                        -- Parse the JSON response using custom function
+                        local parsed_values = parse_json(body_str)
+                        for _, entry in ipairs(parsed_values) do
+                          -- Match the timestamp and cost
+                          local timestamp, cost = entry:match("([^:]+):([^:]+)")
+                          timestamp = timestamp and timestamp:gsub('"', '') or nil
+                          cost = cost and cost:gsub('"', '') or nil
+                          if timestamp and cost then
+                            if tonumber(timestamp) > tonumber(global_timestamp) then
+                              sum = sum + tonumber(cost)
+                            end
+                          end
+                        end
+                        -- Set the new body with the sum
+                        response_handle:body():setBytes(tostring(sum))
+                        response_handle:headers():remove("content-length")
+                        response_handle:headers():add("content-length", tostring(#tostring(sum)))
+
+                      end
+
+                - name: envoy.filters.http.router
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: "/etc/envoy/tls/server-cert.pem"
+                    private_key:
+                      filename: "/etc/envoy/tls/server-key.pem"
+                validation_context:
+                  trusted_ca:
+                    filename: "/etc/envoy/tls/ca.pem"
+
 
   clusters:
     - name: service_cluster
@@ -69,7 +595,8 @@ static_resources:
                       address: service
                       port_value: 5678
     - name: ext_authz-opa-service
-      type: LOGICAL_DNS
+      type: STRICT_DNS
+
       typed_extension_protocol_options:
         envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
           "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
@@ -85,7 +612,7 @@ static_resources:
                   address: ext_authz-opa-service
                   port_value: 9002
     - name: static-opa
-      type: LOGICAL_DNS
+      type: STRICT_DNS
       typed_extension_protocol_options:
         envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
           "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
@@ -100,6 +627,19 @@ static_resources:
                 socket_address:
                   address: static-opa
                   port_value: 9003
+    - name: webdis
+      connect_timeout: 0.25s
+      type: STRICT_DNS
+      load_assignment:
+        cluster_name: webdis
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: webdis
+                      port_value: 7379
+
       # transport_socket:
       #   name: envoy.transport_sockets.tls
       #   typed_config:
@@ -113,3 +653,10 @@ static_resources:
       #       validation_context:
       #         trusted_ca:
       #           filename: "/etc/envoy/tls/ca.pem"
+
+admin:
+  access_log_path: "/dev/null"
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901
