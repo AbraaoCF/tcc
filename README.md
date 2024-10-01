@@ -1,4 +1,4 @@
-# Zero Trust Architecture with OPA Policies approach
+# Zero Trust Architecture with OPA Policies approach 
 
 This repository proposes a solution using the Open Policy Agent (OPA) as a tool to meet Zero Trust standards. 
 ## Sumary
@@ -98,7 +98,7 @@ docker-compose up --build -d
 This should run the following containers and its respective ports:
  - ext_authz-opa-service: `8181:8181` used to inject data and `9002:9002` used for gRPC communication
  - static-opa: `8282:8282` used to inject data and `9003:9003` used for gRPC communication
- - envoy: `10000:10000` 
+ - envoy: `10000:10000`, `10001:10001`, `10000:10002`,`10000:10002`,`10003:10003`,`10004:10004`, `10005:10005`
  - nginx: `443:443`
  - hello-word service: `5678:5678`
  - webdis: `7379:7379`

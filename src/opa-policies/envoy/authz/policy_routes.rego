@@ -136,6 +136,11 @@ svc_spiffe_id := client_id if {
 	[_, client_id] := split(uri_type_san, `=`)
 }
 
+svc_spiffe_id := client_id if {
+	not	split(http_request.headers["x-forwarded-client-cert-test"], `;`)
+	client_id := "unauthenticated"
+}
+
 check_id_building if {
 	svc_spiffe_id in data.building_svc
 }

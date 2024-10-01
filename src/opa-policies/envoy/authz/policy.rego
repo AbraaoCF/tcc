@@ -8,11 +8,11 @@
 #														  #
 #  - Rate Limiting 										  #
 #     - User (disabled by default) 						  #
-#			To enable, uncoment the lines 80-82 and 91 	  #
+#			To enable, uncoment the lines 99-101 and 118  #
 #     - Endpoint (disabled by default) 					  #
-# 			To enable, uncoment the lines 83-85 and 92 	  #
+# 			To enable, uncoment the lines 103-105 and 119 #
 #     - User/Endpoint (disabled by default) 			  #
-#			To enable, uncoment the lines 86-88 and 93	  #
+#			To enable, uncoment the lines 107-110 and 120 #
 #														  #
 #  - Rate Limiting with Budget (enabled by default)		  #
 #														  #
@@ -49,19 +49,19 @@ now := time.now_ns() / 1000000000
 window_start := now - data.rate_limits_config.time_window_seconds
 
 user_budget := budget if {
-	not outside_working_hours
+	inside_working_hours
 	budget := project_config.budget
 }
 
 user_budget := budget if {
-	outside_working_hours
+	not inside_working_hours
 	budget := project_config.night_budget
 }
 
-outside_working_hours if {
+inside_working_hours if {
 	[hour, _, _] := time.clock(time.now_ns())
-	not hour >= environment_variables.starting_working_hours
-	not hour <= environment_variables.ending_working_hours
+	hour >= environment_variables.starting_working_hours
+	hour <= environment_variables.ending_working_hours
 }
 
 default allow := false
@@ -73,6 +73,19 @@ allow := response if {
 		"headers": {"x-ext-authz-check": "allowed"},
 		"id": svc_spiffe_id,
 		"request_costs": -1,
+		"budget_left": -1,
+	}
+}
+
+allow := response if {
+	http_request.method == "GET"
+	endpoint := allow_path
+	endpoint in data.whitelisted_endpoints
+	response := {
+		"allowed": true,
+		"headers": {"x-ext-authz-check": "allowed"},
+		"id": svc_spiffe_id,
+		"request_costs": 0,
 		"budget_left": -1,
 	}
 }
@@ -97,23 +110,53 @@ allow := response if {
 	# user_endpoint_logs_count < rate_limit_user_endpoint
 
 	# Budget Rate Limiting
-	user_id_budget := sprintf("%s/budget", [user])
-	cost_logs := request_logs_cost(user_id_budget, user_budget, window_start)
-	cost_request := data.cost_endpoints[endpoint]
-	cost_logs + cost_request < user_budget
+	request_info := process_request_budget(user, endpoint)
 
-	response := {
-		"allowed": true,
-		"headers": {"x-ext-authz-check": "allowed"},
-		"id": user,
-		"request_costs": cost_request,
-		"budget_left": user_budget - (cost_logs + cost_request),
-	}
+    # Escolher a resposta dependendo de exceder ou não o orçamento
+    response = choose_response(request_info, user)
 
 	# log_request(user, now)
 	# log_request(endpoint, now)
 	# log_request(user_endpoint, now)
-	log_request_budget(user_id_budget, now, cost_request)
+}
+
+
+choose_response(request_info, user) = response if {
+    not request_info.exceed_budget
+    response := {
+        "allowed": true,
+        "headers": {"x-ext-authz-check": "allowed"},
+        "id": user,
+        "request_costs": request_info.cost_request,
+        "budget_left": request_info.budget_left,
+    }
+	log_request_budget(request_info.user_id_budget, now, request_info.cost_request)
+}
+
+choose_response(request_info, user) = response if {
+    request_info.exceed_budget
+    response := {
+        "allowed": false,
+        "http_status": 429,
+        "headers": {"x-ext-authz-check": "denied", "x-ext-authz-error": "Budget exceeded"},
+        "id": user,
+        "request_costs": request_info.cost_request,
+        "budget_left": request_info.budget_left,
+    }
+}
+
+process_request_budget(user, endpoint) = response if {
+    user_id_budget := sprintf("%s/budget", [user])
+    cost_logs := request_logs_cost(user_id_budget, user_budget, window_start)
+    cost_request := data.cost_endpoints[endpoint]
+    
+    response := {
+        "user_id_budget": user_id_budget,
+        "cost_logs": cost_logs,
+        "cost_request": cost_request,
+        "budget_left": user_budget - (cost_logs + cost_request),
+        "exceed_budget": cost_logs + cost_request > user_budget
+    }
 }
 
 ca_cert := data.certs.ca_cert
@@ -125,35 +168,36 @@ client_key := data.certs.client_key
 request_count(id, size, window_start) := counter if {
 	response := http.send({
 		"method": "GET",
-		"url": sprintf("https://nginx:443/LRANGE/%s/0/%v", [urlquery.encode(id), size]),
+		"url": sprintf("https://envoy:10004/LRANGE/%s/0/%v", [urlquery.encode(id), size]),
 		"headers": {"Content-Type": "application/json"},
 		"tls_ca_cert": ca_cert,
 		"tls_client_cert": client_cert,
 		"tls_client_key": client_key,
 	})
 	filtered := filter_logs(response.body.LRANGE, window_start)
-	counter := count([1])
+	counter := count(filtered)
 }
 
 request_logs_cost(id, budget, window_start) := total_cost if {
 	redisl := http.send({
 		"method": "GET",
-		"url": sprintf("https://nginx:443/LRANGE/%s/0/%v", [urlquery.encode(id), budget]),
-		"headers": {"Content-Type": "application/json"},
+		"url": sprintf("https://envoy:10005/LRANGE/%s/0/%v", [urlquery.encode(id), budget]),
+		"headers": {
+			"Content-Type": "application/json",
+			"x-timestamp": sprintf("%f", [window_start]),
+		},
 		"tls_ca_cert": ca_cert,
 		"tls_client_cert": client_cert,
 		"tls_client_key": client_key,
 	})
-	filtered_costs := [parse(item).cost | some item in redisl.body.LRANGE; parse(item).timestamp > window_start]
-	total_cost := sum(filtered_costs)
+	total_cost := to_number(redisl.body)
 }
 
-# Budget
 log_request_budget(id, timestamp, value) if {
 	valor := sprintf("%.5f:%v", [timestamp, value])
 	answer := http.send({
 		"method": "GET",
-		"url": sprintf("https://nginx:443/LPUSH/%s/%s", [urlquery.encode(id), urlquery.encode(valor)]),
+		"url": sprintf("https://envoy:10004/LPUSH/%s/%s", [urlquery.encode(id), urlquery.encode(valor)]),
 		"headers": {"Content-Type": "application/json"},
 		"tls_ca_cert": ca_cert,
 		"tls_client_cert": client_cert,
@@ -164,7 +208,7 @@ log_request_budget(id, timestamp, value) if {
 log_request(id, value) if {
 	valuer := http.send({
 		"method": "GET",
-		"url": sprintf("https://nginx:443/LPUSH/%s/%.5f", [urlquery.encode(id), value]),
+		"url": sprintf("https://envoy:10004/LPUSH/%s/%.5f", [urlquery.encode(id), value]),
 		"headers": {"Content-Type": "application/json"},
 		"tls_ca_cert": ca_cert,
 		"tls_client_cert": client_cert,
