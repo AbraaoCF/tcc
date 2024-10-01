@@ -34,29 +34,34 @@
   ],
   "projects_config": {
     "default": {
-      "budget": 10,
+      "budget": 200,
       "night_budget": 0
     },
     "spiffe://acme.com/admin": {
-      "budget": 10,
+      "budget": 200,
       "night_budget": 300
     },
     "spiffe://acme.com/projeto1": {
-      "budget": 10,
-      "night_budget": 300
+      "budget": 200,
+      "night_budget": 0
     },
     "spiffe://acme.com/projeto2": {
-      "budget": 10,
+      "budget": 300,
       "night_budget": 300
     },
     "spiffe://acme.com/projeto3": {
-      "budget": 10,
-      "night_budget": 300
+      "budget": 200,
+      "night_budget": 0
+    },
+    "unauthenticated": {
+      "budget": 200,
+      "night_budget": 0
     }
   },
   "building_svc": [
     "spiffe://acme.com/projeto1", 
-    "spiffe://acme.com/projeto2"
+    "spiffe://acme.com/projeto2",
+    "unauthenticated"
   ],
   "consumption_svc": [
     "spiffe://acme.com/projeto3"
